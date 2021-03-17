@@ -5,11 +5,67 @@ FILE_CONTENT="$(cat $MSG_FILE)"
 # Initialize constants here
 export REGEX='^\[TA[0-9]+\] .+'
 
-if [[ $FILE_CONTENT =~ $REGEX ]]; then
-  echo "Good commit!"
-else
-  echo "Invalid commit message: $FILE_CONTENT"
-  exit 1
-fi
+# Allows us to read user input below, assigns stdin to keyboard
+exec < /dev/tty
 
+while ! [[ $FILE_CONTENT =~ $REGEX ]]; do
+  echo "Invalid commit message: $FILE_CONTENT"
+  echo "Please use the following format: $REGEX"
+  printf "ex: [TA123] fix issue with commit messages\n\n"
+
+  # todo: lookup assigned tasks in rally
+  TASKS="TA1, TA2, TA3"
+
+  printf "Assigned tasks: $TASKS\n\n"
+
+  echo "Options:"
+  echo "  exit - quit and recommit later"
+  echo "  bypass - commit anyways"
+  echo "  prepend: TA1234 - prepend a task ID from above to the commit message and commit"
+  printf "  replace \"[TA1234] new commit message\" - replace the commit message and commit\n\n"
+
+  read -p 'selection: ' selection
+  
+  if [[ $selection == "exit" ]]; then
+    # reset stdin
+    exec <&-
+    exit 1
+  elif [[ $selection == "bypass" ]]; then
+    echo "Ignoring commit message rules"
+    # reset stdin
+    exec <&-
+    exit 0
+  elif [[ $selection =~ ^prepend:[[:blank:]]*TA[0-9]+$ ]]; then
+    selectedTask=$(echo $selection | cut -d':' -f 2 | xargs)
+    updatedMessage=$(echo "[$selectedTask] $FILE_CONTENT")
+
+    echo "updated commit message: $updatedMessage"
+    read -p 'confirm[Y/N]: ' selection
+
+    if [[ $selection == "Y" ]] || [[ $selection == "y" ]] ; then
+      echo $updatedMessage > $MSG_FILE
+      FILE_CONTENT=$updatedMessage
+      echo "Commit message was updated."
+    else
+      echo "Commit message was not updated."
+    fi
+  elif [[ $selection =~ ^prepend:[[:blank:]]*TA[0-9]+$ ]]; then
+    updatedMessage=$(echo $selection | cut -d':' -f 2 | xargs)
+
+    echo "updated commit message: $updatedMessage"
+    read -p 'confirm[Y/N]: ' selection
+
+    if [[ $selection == "Y" ]] || [[ $selection == "y" ]] ; then
+      echo $updatedMessage > $MSG_FILE
+      FILE_CONTENT=$updatedMessage
+      echo "Commit message was updated."
+    else
+      echo "Commit message was not updated."
+    fi
+  else
+    printf "unknown selection: $selection\n\n"
+  fi
+done
+
+echo "Good commit!"
 exit 0
