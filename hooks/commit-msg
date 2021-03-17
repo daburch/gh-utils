@@ -9,6 +9,7 @@ export REGEX='^\[TA[0-9]+\] .+'
 exec < /dev/tty
 
 while ! [[ $FILE_CONTENT =~ $REGEX ]]; do
+  printf "\n______\n\n"
   echo "Invalid commit message: $FILE_CONTENT"
   echo "Please use the following format: $REGEX"
   printf "ex: [TA123] fix issue with commit messages\n\n"
@@ -19,11 +20,12 @@ while ! [[ $FILE_CONTENT =~ $REGEX ]]; do
   printf "Assigned tasks: $TASKS\n\n"
 
   echo "Options:"
-  echo "  exit - quit and recommit later"
-  echo "  bypass - commit anyways"
-  echo "  prepend: TA1234 - prepend a task ID from above to the commit message and commit"
-  printf "  replace \"[TA1234] new commit message\" - replace the commit message and commit\n\n"
+  echo "  exit                                  - quit and recommit later"
+  echo "  bypass                                - commit anyways"
+  echo "  prepend: TA1234                       - prepend a task ID from above to the commit message and commit"
+  echo "  replace: [TA1234] new commit message  - replace the commit message and commit"
 
+  printf "\n"
   read -p 'selection: ' selection
   
   if [[ $selection == "exit" ]]; then
@@ -49,7 +51,7 @@ while ! [[ $FILE_CONTENT =~ $REGEX ]]; do
     else
       echo "Commit message was not updated."
     fi
-  elif [[ $selection =~ ^prepend:[[:blank:]]*TA[0-9]+$ ]]; then
+  elif [[ $selection =~ ^replace:[[:blank:]]*.*$ ]]; then
     updatedMessage=$(echo $selection | cut -d':' -f 2 | xargs)
 
     echo "updated commit message: $updatedMessage"
@@ -63,7 +65,7 @@ while ! [[ $FILE_CONTENT =~ $REGEX ]]; do
       echo "Commit message was not updated."
     fi
   else
-    printf "unknown selection: $selection\n\n"
+    printf "unknown selection: $selection"
   fi
 done
 
