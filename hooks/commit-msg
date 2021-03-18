@@ -7,79 +7,149 @@
 
 # Git Commit template enforcement
 
-function lookup_rally_tasks() {
-  # todo: lookup assigned tasks in rally
-  RALLY_TASKS=("TA123", "TA5005", "TA10000")
+function main() {
+  # Allow user input
+  exec < /dev/tty
 
-  echo "Assigned tasks:"
-  for TASK in ${RALLY_TASKS[@]}; do
-    echo "  $TASK"
+  COMMIT_MESSAGE_FILE=$1
+  COMMIT_MESSAGE="$(cat $COMMIT_MESSAGE_FILE)"
+
+  REGEX='^\[TA[0-9]+\][[:space:]].+$'
+  while ! [[ $COMMIT_MESSAGE =~ $REGEX ]]; do
+    # Describe the invalid commit message and show expected format
+    describe_invalid_commit_message "$COMMIT_MESSAGE"
+
+    # lookup rally tasks for the user
+    lookup_rally_tasks
+
+    # List options for solving the issue
+    list_options
+
+    # get user input
+    local input
+    read -p 'select option: ' input
+
+    # resolve the issue with user input
+    handle_user_input "$input"
   done
+
+  # confirm success to the user
+  echo "Good commit!"
+
+  # close stdin from before
+  exec <&-
+
+  # exit with success
+  exit 0
 }
 
-MSG_FILE=$1
-FILE_CONTENT="$(cat $MSG_FILE)"
+# Describe the invalid commit message and show expected format
+function describe_invalid_commit_message() {
+  local message=$1
 
-# Allows us to read user input below, assigns stdin to keyboard
-exec < /dev/tty
-
-while ! [[ $FILE_CONTENT =~ ^\[TA[0-9]+\][[:space:]].+$ ]]; do
   printf "\n______\n\n"
-  echo "Invalid commit message: $FILE_CONTENT"
-  echo "Please use the following format: $REGEX"
-  printf "ex: [TA123] fix issue with commit messages\n\n"
-
-  lookup_rally_tasks
-
-  echo "Options:"
-  echo "  exit                                  - quit and recommit later"
-  echo "  bypass                                - commit anyways"
-  echo "  prepend: TA1234                       - prepend a task ID from above to the commit message and commit"
-  echo "  replace: [TA1234] new commit message  - replace the commit message and commit"
-
-  printf "\n"
-  read -p 'selection: ' selection
   
-  if [[ $selection == "exit" ]]; then
-    # reset stdin
-    exec <&-
-    exit 1
-  elif [[ $selection == "bypass" ]]; then
-    echo "Ignoring commit message rules"
-    # reset stdin
-    exec <&-
-    exit 0
-  elif [[ $selection =~ ^prepend:[[:blank:]]*TA[0-9]+$ ]]; then
-    selectedTask=$(echo $selection | cut -d':' -f 2 | xargs)
-    updatedMessage=$(echo "[$selectedTask] $FILE_CONTENT")
+  printf "Invalid commit message:\n\n"
+  printf "\t$message\n\n"
 
-    echo "updated commit message: $updatedMessage"
-    read -p 'confirm[Y/N]: ' selection
+  printf "Please use the following format:\n\n"
+  printf "\t[TA123] fix issue with commit messages\n\n"
+}
 
-    if [[ $selection == "Y" ]] || [[ $selection == "y" ]] ; then
-      echo $updatedMessage > $MSG_FILE
-      FILE_CONTENT=$updatedMessage
-      echo "Commit message was updated."
-    else
-      echo "Commit message was not updated."
-    fi
-  elif [[ $selection =~ ^replace:[[:blank:]]*.*$ ]]; then
-    updatedMessage=$(echo $selection | cut -d':' -f 2 | xargs)
+# Write the updated commit message the the COMMIT_MESSAGE_FILE
+function update_commit_message() {
+  local updated_message=$1
 
-    echo "updated commit message: $updatedMessage"
-    read -p 'confirm[Y/N]: ' selection
+  echo "updated commit message: $updated_message"
+  
+  local input
+  read -p 'confirm [Y/N]: ' input
 
-    if [[ $selection == "Y" ]] || [[ $selection == "y" ]] ; then
-      echo $updatedMessage > $MSG_FILE
-      FILE_CONTENT=$updatedMessage
-      echo "Commit message was updated."
-    else
-      echo "Commit message was not updated."
-    fi
+  if [[ $input == "Y" ]] || [[ $input == "y" ]] ; then
+    echo $updated_message > $COMMIT_MESSAGE_FILE
+    COMMIT_MESSAGE=$updated_message
+
+    echo "Commit message was updated."
   else
-    printf "unknown selection: $selection"
+    echo "Commit message was not updated."
   fi
-done
+}
 
-echo "Good commit!"
-exit 0
+# Lookup rally tasks for a given user
+function lookup_rally_tasks() {
+  # todo: lookup assigned tasks in rally
+  RALLY_TASKS=("TA123" "TA5005" "TA10000")
+
+  # Display Rally tasks for the user
+  printf "Assigned tasks:\n\n"
+  for TASK in ${RALLY_TASKS[@]}; do
+    printf "\t[$TASK]\n"
+  done
+  printf "\n"
+}
+
+# Handle user input for handling an invalid commit
+function handle_user_input() {
+  local input=$1
+  if [[ $input == "exit" ]]; then
+    handle_exit
+  elif [[ $input == "bypass" ]]; then
+    handle_bypass
+  elif [[ $input =~ ^prepend:[[:blank:]]+TA[0-9]+$ ]]; then
+    handle_prepend "$input"
+  elif [[ $input =~ ^replace:[[:blank:]]+.*$ ]]; then
+    handle_replace "$input"
+  else
+    printf "unknown selection: $input"
+  fi
+}
+
+# List user input options when handling an invalid commit
+function list_options() {
+  printf "Options:\n\n"
+  printf "\texit                                    - quit and recommit later\n"
+  printf "\tbypass                                  - commit anyways\n"
+  printf "\tprepend: TA1234                         - prepend a task ID from above to the commit message and commit\n"
+  printf "\treplace: [TA1234] new commit message    - replace the commit message and commit\n\n"
+}
+
+# Option - exit
+function handle_exit() {
+  printf "Commit cancelled.\n"
+
+  # close stdin from before
+  exec <&-
+
+  # exit with error
+  exit 1
+}
+
+# Option - bypass
+function handle_bypass() {
+  echo "Commit pushed through without valid format.\n"
+
+  # close stdin from before
+  exec <&-
+
+  # exit with success
+  exit 0
+}
+
+# Option - prepend
+function handle_prepend() {
+  local input=$1
+  local task=$(echo $input | cut -d':' -f 2 | xargs)
+  local updated_message=$(echo "[$task] $COMMIT_MESSAGE")
+
+  update_commit_message "$updated_message"
+}
+
+# Option - replace
+function handle_replace() {
+  local input=$1
+  local updated_message=$(echo $input | cut -d':' -f 2 | xargs)
+
+  update_commit_message "$updated_message"
+}
+
+main "$@"
