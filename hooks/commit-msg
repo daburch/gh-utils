@@ -1,23 +1,35 @@
 #!/bin/bash
+
+# Called by "git commit" with one argument, the name of the file
+# that has the commit message.  The hook should exit with non-zero
+# status after issuing an appropriate message if it wants to stop the
+# commit.  The hook is allowed to edit the commit message file.
+
+# Git Commit template enforcement
+
+function lookup_rally_tasks() {
+  # todo: lookup assigned tasks in rally
+  RALLY_TASKS=("TA123", "TA5005", "TA10000")
+
+  echo "Assigned tasks:"
+  for TASK in ${RALLY_TASKS[@]}; do
+    echo "  $TASK"
+  done
+}
+
 MSG_FILE=$1
 FILE_CONTENT="$(cat $MSG_FILE)"
-
-# Initialize constants here
-export REGEX='^\[TA[0-9]+\] .+'
 
 # Allows us to read user input below, assigns stdin to keyboard
 exec < /dev/tty
 
-while ! [[ $FILE_CONTENT =~ $REGEX ]]; do
+while ! [[ $FILE_CONTENT =~ ^\[TA[0-9]+\][[:space:]].+$ ]]; do
   printf "\n______\n\n"
   echo "Invalid commit message: $FILE_CONTENT"
   echo "Please use the following format: $REGEX"
   printf "ex: [TA123] fix issue with commit messages\n\n"
 
-  # todo: lookup assigned tasks in rally
-  TASKS="TA1, TA2, TA3"
-
-  printf "Assigned tasks: $TASKS\n\n"
+  lookup_rally_tasks
 
   echo "Options:"
   echo "  exit                                  - quit and recommit later"
